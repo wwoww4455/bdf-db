@@ -1,0 +1,118 @@
+Bạn lấy scpipt nũ của tôi ghép scpipt này vô chổ aim để bên dưới local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+print("[ShrinkHack] START (No UI)")
+
+local Config = {
+    AimRange = 30, -- Bạn có thể đổi số này thành 20 hoặc 10 nếu muốn
+    AimbotEnabled = true, -- Luôn bật sẵn ngầm
+}
+
+local function IsTeammate(player)
+    if LocalPlayer.Team and player.Team then
+        return LocalPlayer.Team == player.Team
+    end
+    return false
+end
+
+local AimState = {
+    Target = nil,
+    Smoothing = 0.5,
+    VisibleOnly = false,
+}
+
+local function IsVisible(targetPart)
+    if not AimState.VisibleOnly then return true end
+    local origin = Camera.CFrame.Position
+    local dir = (targetPart.Position - origin)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {
+        LocalPlayer.Character,
+        targetPart.Parent,
+    }
+    local result = workspace:Raycast(origin, dir, params)
+    return result == nil
+end
+
+local function GetClosestTarget()
+    local closest, bestDist = nil, 999999
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and not IsTeammate(player) then
+            local char = player.Character
+            if char then
+                local head = char:FindFirstChild("Head")
+                local hum  = char:FindFirstChildOfClass("Humanoid")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                
+                if head and hum and hum.Health > 0 and root then
+                    if myRoot then
+                        local distance = (root.Position - myRoot.Position).Magnitude
+                        if distance <= Config.AimRange then
+                            if distance < bestDist and IsVisible(head) then
+                                bestDist = distance
+                                closest = head
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function SmoothAimAt(targetPos)
+    if not targetPos then return end
+    local camPos = Camera.CFrame.Position
+    local goalCF = CFrame.new(camPos, targetPos)
+    Camera.CFrame = Camera.CFrame:Lerp(goalCF, AimState.Smoothing)
+end
+
+print("[ShrinkHack] Aim Logic OK")
+
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if Config.AimbotEnabled then
+            local isMouseDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or UserInputService:IsMouseButtonPressed(Enum.UserInputType.Touch)
+            local char = LocalPlayer.Character
+            local equipped = char and char:FindFirstChildOfClass("Tool")
+            
+            if isMouseDown and equipped then
+                if not AimState.Target then
+                    AimState.Target = GetClosestTarget()
+                end
+                
+                if AimState.Target then
+                    local tChar = AimState.Target.Parent
+                    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+                    local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+                    
+                    if tHum and tHum.Health > 0 and tRoot and myRoot then
+                        local dist = (tRoot.Position - myRoot.Position).Magnitude
+                        if dist <= Config.AimRange then
+                            SmoothAimAt(AimState.Target.Position)
+                        else
+                            AimState.Target = nil
+                        end
+                    else
+                        AimState.Target = nil
+                    end
+                end
+            else
+                AimState.Target = nil
+            end
+        else
+            AimState.Target = nil
+        end
+    end)
+end)
+
+print("[ShrinkHack] === LOADED (NO UI) ===")
